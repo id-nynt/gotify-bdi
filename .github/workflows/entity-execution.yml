@@ -88,6 +88,12 @@ jobs:
           args: --timeout=5m
           skip-cache: true
       - uses: actions/upload-artifact@v4
+        if: always() && inputs.entity == 'test'
+        with:
+          name: ci-evidence-${{ inputs.campaign_id }}
+          path: coverage.txt
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
         if: inputs.entity == 'build'
         with:
           name: ui-${{ inputs.campaign_id }}

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import uuid
@@ -110,6 +111,7 @@ def main() -> int:
                                                 "rollback_failure", "rollback_unknown", "rollback_unhealthy", "execution_uncertain", "reconciled_success", "reconciled_failure", "candidate_stopped", "candidate_restart_fails", "candidate_repair_unknown", "rollback_reconsideration"])
     parser.add_argument("--known-good", type=Path, help="achieved live campaign result verifying the baseline release")
     parser.add_argument("--baseline", action="store_true", help="explicit first baseline run without prior recovery release")
+    parser.add_argument("--campaign-id", help="fresh identifier for external scenario correlation; does not select a scenario")
     parser.add_argument("--confirm-compatible-rollback", action="store_true", help="confirm source rollback is compatible with retained database schema/data")
     parser.add_argument("--artifacts-dir", type=Path,
                         help="new directory for this campaign's provenance, snapshots, journal and result")
@@ -159,7 +161,9 @@ def main() -> int:
     elif recovery_required and not args.baseline and not args.reconcile_only:
         raise ModelError("Provide --known-good verified-result.json, or --baseline for the initial known-good deployment")
 
-    campaign = "campaign-" + uuid.uuid4().hex
+    campaign = args.campaign_id or "campaign-" + uuid.uuid4().hex
+    if not re.fullmatch('[A-Za-z0-9][A-Za-z0-9_.-]{0,100}', campaign):
+        raise ModelError('Campaign identifier must be a safe identifier')
     artifacts = args.artifacts_dir.resolve() if args.artifacts_dir else ROOT / "runs" / campaign
     try:
         artifacts.mkdir(parents=True, exist_ok=False)
