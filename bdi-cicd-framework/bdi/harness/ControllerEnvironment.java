@@ -207,8 +207,18 @@ public final class ControllerEnvironment extends Environment {
         journal.event("entity_execution_started", null, Map.of("entity", entity, "attempt", attempt));
         EntityExecution.Result result = executor.execute(entity, attempt);
         latest.put(entity, result);
-        if (controller.project().equals("gotify") && entity.equals("production") && !result.status().equals("unknown"))
+        if (controller.project().equals("gotify") && entity.equals("production") && !result.status().equals("unknown")) {
             productionFinishedAt = System.nanoTime();
+            if (result.status().equals("success") && executor instanceof GitHubEntityExecution) {
+                Path clock = Path.of(System.getProperty("user.home"), "gotify-study-runtime", "trials", "bdi",
+                    required("BDI_CAMPAIGN_ID"), "evidence", "production-boundary.json");
+                long elapsed = deploymentElapsed(JSON.readTree(Files.readString(clock)),
+                    required("BDI_CAMPAIGN_ID"), result.executionId(), Instant.now());
+                productionFinishedAt -= elapsed * 1_000_000;
+                journal.event("production_boundary_clock", null, Map.of("elapsed_ms", elapsed,
+                    "execution_id", result.executionId(), "source", clock.toString()));
+            }
+        }
         if (controller.project().equals("gotify") && entity.equals("prepare") && result.status().equals("success")
                 && executor instanceof GitHubEntityExecution github) {
             github.verifiedPackagedBaseline();
@@ -311,6 +321,16 @@ public final class ControllerEnvironment extends Environment {
             + m.dataStatus() + "," + m.readiness() + "," + m.errorRate() + "," + m.latencyP95Ms() + "," + m.availability() + "," + elapsed + ")"));
         informAgsEnvironmentChanged();
         return true;
+    }
+
+    static long deploymentElapsed(com.fasterxml.jackson.databind.JsonNode clock, String trial, String execution, Instant now) {
+        if (!clock.path("trial").asText().equals(trial) || !clock.path("approach").asText().equals("bdi")
+                || !clock.path("execution_id").asText().equals(execution) || !clock.path("release").asText().equals("v2")
+                || !clock.path("ready_at_unix").isNumber()) throw new IllegalArgumentException("Invalid production boundary clock");
+        double timestamp = clock.path("ready_at_unix").asDouble();
+        if (!Double.isFinite(timestamp) || timestamp <= 0 || timestamp * 1000 > now.toEpochMilli() + 1000)
+            throw new IllegalArgumentException("Invalid production boundary timestamp");
+        return Math.max(0, now.toEpochMilli() - (long)(timestamp * 1000));
     }
 
     private boolean publishPostdeployClock() {
