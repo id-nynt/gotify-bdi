@@ -1,0 +1,10 @@
+{
+  "total_count": 5,
+  "jobs": [
+    {"name":"Build","status":"completed","conclusion":"success","started_at":"2026-09-18T09:00:00Z","completed_at":"2026-09-18T09:01:00Z"},
+    {"name":"Test","status":"completed","conclusion":"success","started_at":"2026-09-18T09:00:00Z","completed_at":"2026-09-18T09:01:10Z"},
+    {"name":"Dependency audit (advisory)","status":"completed","conclusion":"success","started_at":"2026-09-18T09:01:10Z","completed_at":"2026-09-18T09:01:30Z"},
+    {"name":"Deploy staging","status":"completed","conclusion":"success","started_at":"2026-09-18T09:01:30Z","completed_at":"2026-09-18T09:02:30Z"},
+    {"name":"Deploy production","status":"completed","conclusion":"success","started_at":"2026-09-18T09:02:30Z","completed_at":"2026-09-18T09:03:30Z"}
+  ]
+}

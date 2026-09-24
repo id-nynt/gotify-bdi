@@ -1,0 +1,35 @@
+name: Gotify release with agent-controlled recovery
+project: gotify
+workflow_file: entity-execution.yml
+execution:
+  max_retries: 0
+jobs:
+  build:
+    job_name: build
+  test:
+    needs: build
+    job_name: test
+  package:
+    needs: test
+    job_name: package
+  prepare:
+    needs: package
+    job_name: prepare
+  staging:
+    needs: prepare
+    job_name: staging
+    environment: staging
+  production:
+    needs: staging
+    job_name: production
+    environment: production
+recovery:
+  rollback:
+    from: production
+    job_name: rollback
+    environment: production
+
+candidate_repair:
+  production:
+    diagnose_job_name: diagnose_production
+    restart_job_name: restart_production

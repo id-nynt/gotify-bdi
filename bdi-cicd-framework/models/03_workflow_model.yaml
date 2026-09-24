@@ -1,0 +1,154 @@
+# Generated from 01_pipeline.yaml, 02_goal.yaml, controller_policy.yaml and runtime_bindings.yaml; do not edit.
+schema_version: 3
+workflow:
+  name: Gotify release with agent-controlled recovery
+  entities(E):
+  - build
+  - test
+  - package
+  - prepare
+  - staging
+  - production
+  - rollback
+  dependencies(D):
+  - from: build
+    to: test
+  - from: test
+    to: package
+  - from: package
+    to: prepare
+  - from: prepare
+    to: staging
+  - from: staging
+    to: production
+  observable_properties(O):
+    status:
+      values:
+      - success
+      - failure
+      - transient_failure
+      - dispatch_rejected
+      - cancelled
+      - timeout
+      - skipped
+      - unknown
+    duration:
+      unit: milliseconds
+    health:
+      values:
+      - healthy
+      - unhealthy
+      - unknown
+  recovery(R):
+  - from: production
+    to: rollback
+goals:
+  achieve(A):
+  - production.status == success
+  - staging.status == success
+  maintain(M):
+  - production.duration <= 1800000
+  - production.health == healthy
+  duration_unit: milliseconds
+  avoid(V):
+  - condition: production.status == success
+    when: test.status != success
+  - condition: production.status == success
+    when: staging.status != success
+execution:
+  max_retries: 0
+  observation_attempts: 6
+  observation_interval_seconds: 5
+  observation_timeout_seconds: 45
+  healthy_observations: 2
+  retry_interval_seconds: 5
+  reconciliation_attempts: 3
+  reconciliation_interval_seconds: 5
+  retry_safe: []
+observation_schema:
+  attempt_id_required: true
+  duration_required_for:
+  - production
+  before:
+    production: staging
+  after:
+  - staging
+  - production
+  - rollback
+recovery_policy:
+  rollback:
+    run_after:
+    - failure
+    - telemetry_block
+    - telemetry_unknown
+    - maintenance_violation
+    release_source: known_good
+    retryable: false
+    verify_health: true
+    terminal_on_success: restored
+    terminal_on_failure: failed
+bindings:
+  project: gotify
+  controller:
+    workflow_file: entity-execution.yml
+    jobs:
+      build: build
+      test: test
+      package: package
+      prepare: prepare
+      staging: staging
+      production: production
+      rollback: rollback
+    environments:
+      staging: staging
+      production: production
+      rollback: production
+  adapter: gotify_probe
+  environments:
+    staging:
+      probe_command:
+      - python3
+      - '{{repo_root}}/experiment/operations.py'
+      - probe
+      - --approach
+      - bdi
+      - --trial
+      - '{{trial_id}}'
+      - --environment
+      - staging
+      - --release
+      - '{{release}}'
+      - --execution-id
+      - '{{execution_id}}'
+    production:
+      probe_command:
+      - python3
+      - '{{repo_root}}/experiment/operations.py'
+      - probe
+      - --approach
+      - bdi
+      - --trial
+      - '{{trial_id}}'
+      - --environment
+      - production
+      - --release
+      - '{{release}}'
+      - --execution-id
+      - '{{execution_id}}'
+  metrics: {}
+  max_age_seconds: 30
+  thresholds:
+    error_rate_high_gt: 0.05
+    latency_p95_ms_high_gt: 500
+  diagnostics:
+    production:
+      compose_project: gotify-bdi-production
+      app_service: gotify
+      database_kind: sqlite
+candidate_repair:
+  production:
+    diagnose_job_name: diagnose_production
+    restart_job_name: restart_production
+    max_attempts: 1
+    deadline_seconds: 180
+    verification_window_seconds: 45

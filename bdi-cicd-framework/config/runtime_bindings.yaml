@@ -1,0 +1,15 @@
+telemetry:
+  adapter: gotify_probe
+  environments:
+    staging:
+      probe_command: [python3, '{{repo_root}}/experiment/operations.py', probe, --approach, bdi, --trial, '{{trial_id}}', --environment, staging, --release, '{{release}}', --execution-id, '{{execution_id}}']
+    production:
+      probe_command: [python3, '{{repo_root}}/experiment/operations.py', probe, --approach, bdi, --trial, '{{trial_id}}', --environment, production, --release, '{{release}}', --execution-id, '{{execution_id}}']
+  metrics: {}
+  max_age_seconds: 30
+
+diagnostics:
+  production:
+    compose_project: gotify-bdi-production
+    app_service: gotify
+    database_kind: sqlite

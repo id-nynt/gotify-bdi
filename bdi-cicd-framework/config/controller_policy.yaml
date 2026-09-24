@@ -1,0 +1,31 @@
+# Explicit project configuration; reviewed values, not implicit defaults.
+execution:
+  observation_attempts: 6
+  observation_interval_seconds: 5
+  observation_timeout_seconds: 45
+  healthy_observations: 2
+  retry_interval_seconds: 5
+  reconciliation_attempts: 3
+  reconciliation_interval_seconds: 5
+  retry_safe: []
+observation:
+  before:
+    production: staging
+  after: [staging, production, rollback]
+recovery_policy:
+  rollback:
+    run_after: [failure, telemetry_block, telemetry_unknown, maintenance_violation]
+    release_source: known_good
+    retryable: false
+    verify_health: true
+    terminal_on_success: restored
+    terminal_on_failure: failed
+telemetry_constraints:
+  error_rate_high_gt: 0.05
+  latency_p95_ms_high_gt: 500
+
+candidate_repair:
+  production:
+    max_attempts: 1
+    deadline_seconds: 180
+    verification_window_seconds: 45

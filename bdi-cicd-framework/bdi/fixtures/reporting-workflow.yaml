@@ -1,0 +1,63 @@
+schema_version: 2
+workflow:
+  name: Reporting service
+  entities(E):
+  - package
+  - verify
+  - preview
+  dependencies(D):
+  - from: package
+    to: verify
+  - from: verify
+    to: preview
+  observable_properties(O):
+    status:
+      values:
+      - success
+      - failure
+      - transient_failure
+      - dispatch_rejected
+      - cancelled
+      - timeout
+      - skipped
+      - unknown
+    duration:
+      unit: milliseconds
+    health:
+      values:
+      - healthy
+      - unhealthy
+      - unknown
+  recovery(R): []
+goals:
+  achieve(A):
+  - preview.status == success
+  avoid(V):
+  - condition: preview.status == success
+    when: verify.status != success
+  duration_unit: milliseconds
+execution:
+  max_retries: 1
+  observation_attempts: 3
+  observation_interval_seconds: 0
+  reconciliation_attempts: 2
+  reconciliation_interval_seconds: 0
+  retry_interval_seconds: 5
+  observation_timeout_seconds: 180
+  healthy_observations: 2
+  retry_safe: []
+observation_schema:
+  attempt_id_required: true
+  duration_required_for: []
+  before: {}
+  after: []
+recovery_policy: {}
+bindings:
+  project: reporting-service
+  controller:
+    workflow_file: reporting-entity.yml
+    jobs:
+      package: Package report
+      verify: Verify report
+      preview: Deploy preview
+    environments: {}

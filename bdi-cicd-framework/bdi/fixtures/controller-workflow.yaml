@@ -1,0 +1,138 @@
+schema_version: 3
+workflow:
+  name: Payment service release with BDI recovery
+  entities(E):
+  - build
+  - test
+  - security
+  - staging
+  - production
+  - rollback
+  dependencies(D):
+  - from: build
+    to: test
+  - from: test
+    to: security
+  - from: security
+    to: staging
+  - from: staging
+    to: production
+  observable_properties(O):
+    status:
+      values:
+      - success
+      - failure
+      - transient_failure
+      - dispatch_rejected
+      - cancelled
+      - timeout
+      - skipped
+      - unknown
+    duration:
+      unit: milliseconds
+    health:
+      values:
+      - healthy
+      - unhealthy
+      - unknown
+  recovery(R):
+  - from: production
+    to: rollback
+goals:
+  achieve(A):
+  - production.status == success
+  - staging.status == success
+  maintain(M):
+  - production.duration <= 1800000
+  - production.health == healthy
+  duration_unit: milliseconds
+  avoid(V):
+  - condition: production.status == success
+    when: test.status != success
+  - condition: production.status == success
+    when: staging.status != success
+execution:
+  max_retries: 1
+  observation_attempts: 36
+  observation_interval_seconds: 5
+  observation_timeout_seconds: 180
+  healthy_observations: 2
+  retry_interval_seconds: 5
+  reconciliation_attempts: 3
+  reconciliation_interval_seconds: 5
+  retry_safe:
+  - build
+  - test
+  - security
+  - staging
+  - production
+observation_schema:
+  attempt_id_required: true
+  duration_required_for:
+  - production
+  before:
+    production: staging
+  after:
+  - staging
+  - production
+  - rollback
+recovery_policy:
+  rollback:
+    run_after:
+    - failure
+    - telemetry_block
+    - telemetry_unknown
+    - maintenance_violation
+    release_source: known_good
+    retryable: false
+    verify_health: true
+    terminal_on_success: restored
+    terminal_on_failure: failed
+bindings:
+  project: payment-service
+  controller:
+    workflow_file: entity-execution.yml
+    jobs:
+      build: Build entity
+      test: Test entity
+      security: Security entity
+      staging: Staging entity
+      production: Production entity
+      rollback: Rollback entity
+    environments:
+      staging: staging
+      production: production
+      rollback: production
+  environments:
+    staging:
+      ready_url: http://127.0.0.1:3001/ready
+      prometheus_url: http://127.0.0.1:9091
+    production:
+      ready_url: http://127.0.0.1:3000/ready
+      prometheus_url: http://127.0.0.1:9090
+  metrics:
+    error_rate_query: (sum(rate(payment_http_errors_total{ci_run_id="{{run_id}}",route="/payments",status_code=~"5.."}[30s]))
+      or vector(0)) / clamp_min(sum(rate(payment_http_requests_total{ci_run_id="{{run_id}}",route="/payments"}[30s])),
+      0.001)
+    latency_p95_ms_query: histogram_quantile(0.95, sum by (le) (rate(payment_http_request_duration_milliseconds_bucket{ci_run_id="{{run_id}}",route="/payments"}[30s])))
+    availability_query: min(payment_service_ready{ci_run_id="{{run_id}}"})
+    sample_age_seconds_query: time() - max(timestamp(payment_service_ready{ci_run_id="{{run_id}}"}))
+  max_age_seconds: 30
+  thresholds:
+    error_rate_high_gt: 0.05
+    latency_p95_ms_high_gt: 500
+  diagnostics:
+    production:
+      compose_project: payment-production
+      app_service: app
+      dependency_service: postgres
+candidate_repair:
+  production:
+    diagnose_job_name: Diagnose candidate
+    restart_job_name: Restart candidate
+    max_attempts: 1
+    deadline_seconds: 300
+    verification_window_seconds: 120
+rollback_reconsideration:
+  production:
+    window_seconds: 60

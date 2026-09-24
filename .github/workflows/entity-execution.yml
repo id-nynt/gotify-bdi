@@ -1,0 +1,110 @@
+name: Gotify BDI operation worker
+run-name: bdi-${{ inputs.execution_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      entity:
+        type: choice
+        required: true
+        options: [build, test, package, prepare, staging, production, rollback, diagnose_production, restart_production]
+      campaign_id:
+        required: true
+        type: string
+      execution_id:
+        required: true
+        type: string
+      attempt:
+        required: true
+        type: string
+      release_sha:
+        required: true
+        type: string
+      failure_mode:
+        type: string
+        default: none
+      experiment_mode:
+        type: string
+        default: normal
+      target_execution_id:
+        type: string
+      diagnostic_binding:
+        type: string
+        default: '{}'
+      verification_seconds:
+        type: string
+        default: '45'
+permissions:
+  contents: read
+  actions: read
+  packages: write
+concurrency:
+  group: gotify-bdi-worker
+  cancel-in-progress: false
+jobs:
+  operation:
+    name: ${{ inputs.entity }}
+    runs-on: ${{ fromJSON(contains(fromJSON('["build","test","package"]'), inputs.entity) && '["ubuntu-latest"]' || '["self-hosted","Linux","X64","gotify-bdi"]') }}
+    timeout-minutes: 45
+    env:
+      ENTITY: ${{ inputs.entity }}
+      CAMPAIGN_ID: ${{ inputs.campaign_id }}
+      EXECUTION_ID: ${{ inputs.execution_id }}
+      ATTEMPT: ${{ inputs.attempt }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      FAILURE_MODE: ${{ inputs.failure_mode }}
+      EXPERIMENT_MODE: ${{ inputs.experiment_mode }}
+      TARGET_EXECUTION_ID: ${{ inputs.target_execution_id }}
+      DIAGNOSTIC_BINDING: ${{ inputs.diagnostic_binding }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GOTIFY_REGISTRY: ghcr.io/id-nynt/gotify-bdi-experiment
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/setup-go@v7
+        if: contains(fromJSON('["build","test"]'), inputs.entity)
+        with:
+          go-version: 1.26.x
+      - name: Install matching UI/browser dependencies
+        if: contains(fromJSON('["build","test","prepare"]'), inputs.entity)
+        run: (cd ui && yarn --frozen-lockfile)
+      - uses: docker/setup-buildx-action@v4
+        if: inputs.entity == 'package'
+      - uses: docker/login-action@v4
+        if: contains(fromJSON('["package","prepare"]'), inputs.entity)
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Execute only the requested operation
+        run: python3 experiment/worker.py
+      - uses: golangci/golangci-lint-action@v9
+        if: inputs.entity == 'build'
+        with:
+          version: v2.13.0
+          args: --timeout=5m
+          skip-cache: true
+      - uses: actions/upload-artifact@v4
+        if: inputs.entity == 'build'
+        with:
+          name: ui-${{ inputs.campaign_id }}
+          path: ui/build/
+          include-hidden-files: true
+      - uses: actions/upload-artifact@v4
+        if: inputs.entity == 'package'
+        with:
+          name: release-${{ inputs.campaign_id }}
+          path: experiment/build/*.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: worker-${{ inputs.execution_id }}
+          path: experiment/build/worker-evidence/
+      - uses: actions/upload-artifact@v4
+        if: always() && contains(fromJSON('["diagnose_production","restart_production"]'), inputs.entity)
+        with:
+          name: repair-${{ inputs.execution_id }}
+          path: experiment/build/worker-evidence/receipt.json

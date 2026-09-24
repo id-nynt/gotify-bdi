@@ -1,0 +1,13 @@
+goal:
+  achieve(A):
+    - production.status == success
+    - staging.status == success
+  maintain(M):
+    - production.duration <= 1800000
+    - production.health == healthy
+  duration_unit: milliseconds
+  avoid(V):
+    - condition: production.status == success
+      when: test.status != success
+    - condition: production.status == success
+      when: staging.status != success

@@ -1,0 +1,53 @@
+# Job roles are stable BDI names; values are actual GitHub Actions job IDs.
+project: payment-service
+controller:
+  workflow_file: entity-execution.yml
+  jobs:
+    build: Build entity
+    test: Test entity
+    security: Security entity
+    staging: Staging entity
+    production: Production entity
+    rollback: Rollback entity
+  release_sources:
+    rollback: known_good
+  environments:
+    staging: staging
+    production: production
+    rollback: production
+  observation_attempts: 18
+  observation_interval_seconds: 5
+jobs:
+  build: build
+  test: test
+  security: security
+  staging: deploy-staging
+  production: deploy-production
+infrastructure_jobs: []
+github_job_names:
+  build: Build
+  test: Test
+  security: Dependency audit (advisory)
+  staging: Deploy staging
+  production: Deploy production
+max_retries: 0
+promotion_gate:
+  before: production
+  observe: staging
+environments:
+  local:
+    ready_url: http://127.0.0.1:3301/ready
+    prometheus_url: http://127.0.0.1:19091
+  staging:
+    ready_url: http://127.0.0.1:3001/ready
+    prometheus_url: http://127.0.0.1:9091
+  production:
+    ready_url: http://127.0.0.1:3000/ready
+    prometheus_url: http://127.0.0.1:9090
+metrics:
+  error_rate_query: '(sum(rate(payment_http_errors_total{ci_run_id="{{run_id}}",route="/payments",status_code=~"5.."}[2m])) or vector(0)) / clamp_min(sum(rate(payment_http_requests_total{ci_run_id="{{run_id}}",route="/payments"}[2m])), 0.001)'
+  latency_p95_ms_query: 'histogram_quantile(0.95, sum by (le) (rate(payment_http_request_duration_milliseconds_bucket{ci_run_id="{{run_id}}",route="/payments"}[2m])))'
+  availability_query: 'min(payment_service_ready{ci_run_id="{{run_id}}"})'
+thresholds:
+  error_rate_high_gt: 0.05
+  latency_p95_ms_high_gt: 500

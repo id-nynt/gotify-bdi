@@ -1,0 +1,56 @@
+plugins {
+    id 'java'
+}
+
+repositories {
+    mavenCentral()
+    maven { url 'https://raw.githubusercontent.com/jacamo-lang/mvn-repo/master' }
+}
+
+dependencies {
+    implementation 'io.github.jason-lang:jason-interpreter:3.3.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.2'
+    implementation 'org.yaml:snakeyaml:2.5'
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['.', '../monitoring', '../actions']
+            exclude 'build/**'
+            exclude 'bin/**'
+            exclude '.gradle/**'
+            exclude 'src/test/**'
+        }
+    }
+    test {
+        java.srcDirs = ['src/test/java']
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+}
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.register('runController', JavaExec) {
+    group = 'BDI'
+    description = 'Run the generated controller; BDI_GUI=true enables the Jason MAS Console'
+    dependsOn classes
+    mainClass = 'harness.ControllerMain'
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir System.getenv('BDI_RUN_DIR') ?: projectDir
+}
+
+// Procedural comparison baseline; never launches the Jason MAS.
+tasks.register('runConventional', JavaExec) {
+    dependsOn classes
+    mainClass = 'harness.ConventionalMain'
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir System.getenv('BDI_RUN_DIR') ?: projectDir
+}

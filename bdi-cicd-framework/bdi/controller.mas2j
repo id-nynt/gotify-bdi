@@ -1,0 +1,5 @@
+MAS bdi_cicd_controller {
+  infrastructure: Local
+  environment: harness.ControllerEnvironment
+  agents: controller_agent;
+}

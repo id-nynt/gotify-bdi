@@ -1,0 +1,17 @@
+bdi/build/
+bdi/.gradle/
+bdi/bin/
+bdi/.settings/
+bdi/.classpath
+bdi/.project
+parser/__pycache__/
+__pycache__/
+parser/testdata/*
+!parser/testdata/.gitkeep
+*.class
+*.log
+
+config/.gradle/
+config/build/
+runs/
+__pycache__/
