@@ -29,7 +29,10 @@ public final class GotifyProbeTelemetry {
             Path output = directory.resolve(id + ".json");
             Process process = new ProcessBuilder(command).redirectOutput(output.toFile())
                 .redirectError(directory.resolve(id + ".stderr").toFile()).start();
-            if (!process.waitFor(60, TimeUnit.SECONDS)) { process.destroyForcibly(); return unknown; }
+            // Match the conventional operation wrapper; the shared operation itself
+            // enforces its 180-second command guard and records uncertain completion.
+            // The agent's 45-second observation window still rejects late samples.
+            if (!process.waitFor(240, TimeUnit.SECONDS)) { process.destroyForcibly(); return unknown; }
             var receipt = JSON.readTree(Files.readString(output));
             return decode(receipt, trial, release, executionId, maxAgeSeconds, Instant.now());
         } catch (Exception error) { return unknown; }
